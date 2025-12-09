@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Meades Restoration Quiz</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Meades Quiz">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .card-flip { transition: transform 0.6s; transform-style: preserve-3d; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen overflow-hidden flex flex-col">
+
+    <div id="root" class="h-full w-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- ICONS (Inline SVGs to avoid dependencies) ---
+        const IconCheck = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>;
+        const IconBrain = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2zM12 14a2 2 0 100-4 2 2 0 000 4z"/><path d="M12 14v7M12 2v4M2 12h4M18 12h4"/></svg>;
+        const IconClock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>;
+
+        // --- DATA: 30 Questions ---
+        const INITIAL_QUESTIONS = [
+            // SECTION 1: Physics of Failure
+            {id: 1, type: 'open', question: 'Why does "Sacrificial Mortar" matter?', answer: 'Mortar must be softer/porous than brick to act as a wick/cushion.', explanation: 'If mortar is too hard (Portland), the brick takes the stress and spalls.'},
+            {id: 2, type: 'open', question: 'What is "Oxide Jacking"?', answer: 'Expansion of rusting steel (6x-10x volume).', explanation: 'Exerts thousands of PSI, lifting walls and cracking lintels.'},
+            {id: 3, type: 'tf', question: 'True/False: Ice exerts more pressure than Salt Crystallization.', answer: 'True (30k vs 14k PSI).', explanation: 'But salt is worse because it cycles daily with humidity, not just freeze/thaw.'},
+            {id: 4, type: 'open', question: 'What is the "Fire Skin" on brick?', answer: 'Outer 1/16" vitrified clay from kiln firing.', explanation: 'Primary weatherproofing. Sandblasting destroys it.'},
+            {id: 5, type: 'open', question: 'Delta T limit for thermal shock?', answer: '40°F - 50°F.', explanation: 'Hot wall + cold water = instant cracks.'},
+            // SECTION 2: Chemistry
+            {id: 6, type: 'open', question: 'Why did NMD 80 (HCl) fail on Rock Salt?', answer: 'Common Ion Effect.', explanation: 'Adding Chloride (HCl) to Chloride (NaCl) stops it from dissolving.'},
+            {id: 7, type: 'open', question: 'Test for Calcium vs Salt?', answer: 'The Fizz Test (Acid).', explanation: 'Fizz = Calcium Carbonate. Wet/No Reaction = Salt.'},
+            {id: 8, type: 'open', question: 'How does a Chelator work?', answer: 'It "claws" the ion so it can\'t re-bond.', explanation: 'Surrounds metal ions to allow rinsing.'},
+            {id: 9, type: 'open', question: 'Risk of Phosphoric Acid on Limestone?', answer: 'Calcium Phosphate precipitate.', explanation: 'Creates a permanent white haze.'},
+            {id: 10, type: 'open', question: 'Why no Bleach on Stone Bio-growth?', answer: 'Leaves salts; roots remain.', explanation: 'Salts attract water, promoting regrowth. Use QACs.'},
+            // SECTION 3: Protocol
+            {id: 11, type: 'open', question: 'GSA Pressure limit for historic granite?', answer: '<400 PSI (Low/Med).', explanation: 'High pressure injects water too deep.'},
+            {id: 12, type: 'open', question: 'Danger of Hot Water in Freezing Temps?', answer: 'Evaporative Cooling / Flash Freezing.', explanation: 'Rapid evaporation super-cools the brick.'},
+            {id: 13, type: 'open', question: 'Protocol for Deep Graffiti Shadow?', answer: 'Solvent + Poultice.', explanation: 'Poultice suction > Stone capillary pull.'},
+            {id: 14, type: 'open', question: 'HCl vs Phosphoric Usage?', answer: 'HCl: Calcium/Mortar. Phosphoric: Rust/Aluminum.', explanation: 'Never swap them. HCl pits Alum; Phos hazes Masonry.'},
+            {id: 15, type: 'open', question: 'Silane/Siloxane vs Sealer?', answer: 'Silane = Breathable. Sealer = Film/Trap.', explanation: 'Silanes line pores; Sealers plug them.'},
+            // SECTION 4: Diagnostics
+            {id: 16, type: 'mc', question: 'Bottom 2ft of wall crumbling. Cause?', options: ['Rising Damp', 'Splashback', 'Bad Mortar'], answer: 'Splashback Zone.', explanation: 'True rising damp is rare. Usually rain bounce.'},
+            {id: 17, type: 'tf', question: 'True/False: pH scale is linear.', answer: 'False (Logarithmic).', explanation: 'pH 14 is 10 million times stronger than pH 7.'},
+            {id: 18, type: 'open', question: 'UV degrades what in wood?', answer: 'Lignin (the glue).', explanation: 'Leaves grey cellulose fuzz.'},
+            {id: 19, type: 'open', question: 'Alum rivets on Copper pipe corrosion?', answer: 'Galvanic Corrosion.', explanation: 'Dissimilar metals create a battery.'},
+            {id: 20, type: 'mc', question: 'Safe media for historic crust (Mohs 3)?', options: ['Alum Oxide', 'Walnut Shells', 'Sand'], answer: 'Walnut Shells.', explanation: 'Must be softer than the brick.'},
+            // SECTION 5: Chemistry II
+            {id: 21, type: 'mc', question: 'Brighten Alum trailer safely?', options: ['HCl', 'Caustic', 'Phosphoric'], answer: 'Phosphoric (Clean Sweep).', explanation: 'Removes oxidation without pitting.'},
+            {id: 22, type: 'tf', question: 'True/False: Fix White Scum with more Stripper?', answer: 'False.', explanation: 'Scum is a salt. Needs Acid to neutralize.'},
+            {id: 23, type: 'open', question: 'Cure for "Ghosting" in pore?', answer: 'Poultice.', explanation: 'Physical vacuuming of pigment.'},
+            {id: 24, type: 'mc', question: 'Risk of painting over salt-cleaned wall?', options: ['Adhesion', 'Subflorescence', ' pH'], answer: 'Subflorescence.', explanation: 'Salt pops the paint off.'},
+            {id: 25, type: 'tf', question: 'True/False: Seal immediately after wash.', answer: 'False.', explanation: 'Traps moisture (Blushing/Spalling).'},
+            // SECTION 6: Safety
+            {id: 26, type: 'open', question: 'Pre-1978 paint assumption?', answer: 'Lead.', explanation: 'EPA RRP Rule.'},
+            {id: 27, type: 'mc', question: 'Danger of dry scraping Guano?', options: ['Smell', 'Histoplasmosis'], answer: 'Histoplasmosis.', explanation: 'Fungal spores in lungs.'},
+            {id: 28, type: 'open', question: 'Respirator band color for Solvents?', answer: 'Black (Organic Vapor).', explanation: 'N95 does nothing for fumes.'},
+            {id: 29, type: 'mc', question: 'Dew Point Boundary danger?', answer: 'Insulating interior.', explanation: 'Freezes wall from inside out.'},
+            {id: 30, type: 'tf', question: 'True/False: Caulk weep holes?', answer: 'False.', explanation: 'Traps water, rots wall.'}
+        ];
+
+        // --- LOGIC ---
+        function App() {
+            const [cards, setCards] = useState([]);
+            const [currentCardIndex, setCurrentCardIndex] = useState(null);
+            const [showAnswer, setShowAnswer] = useState(false);
+            const [done, setDone] = useState(false);
+
+            useEffect(() => {
+                const saved = localStorage.getItem('meadesQuizV1');
+                if (saved) {
+                    processCards(JSON.parse(saved));
+                } else {
+                    const init = INITIAL_QUESTIONS.map(q => ({
+                        ...q,
+                        sm2: { reps: 0, interval: 0, ef: 2.5, next: new Date().toISOString() }
+                    }));
+                    processCards(init);
+                }
+            }, []);
+
+            const processCards = (data) => {
+                const now = new Date();
+                const due = data.filter(c => new Date(c.sm2.next) <= now);
+                setCards(data);
+                if (due.length > 0) {
+                    // Find actual index in main array
+                    const idx = data.findIndex(c => new Date(c.sm2.next) <= now);
+                    setCurrentCardIndex(idx);
+                    setDone(false);
+                } else {
+                    setDone(true);
+                }
+            };
+
+            const rate = (quality) => {
+                const newCards = [...cards];
+                const card = newCards[currentCardIndex];
+                
+                // SM-2 Algorithm simplified
+                let { reps, interval, ef } = card.sm2;
+                if (quality >= 3) {
+                    if (reps === 0) interval = 1;
+                    else if (reps === 1) interval = 6;
+                    else interval = Math.round(interval * ef);
+                    reps++;
+                } else {
+                    reps = 0;
+                    interval = 1;
+                }
+                ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+                if (ef < 1.3) ef = 1.3;
+
+                const nextDate = new Date();
+                nextDate.setDate(nextDate.getDate() + interval);
+                
+                newCards[currentCardIndex] = { 
+                    ...card, 
+                    sm2: { reps, interval, ef, next: nextDate.toISOString() } 
+                };
+
+                localStorage.setItem('meadesQuizV1', JSON.stringify(newCards));
+                setCards(newCards);
+                setShowAnswer(false);
+                
+                // Find next
+                const nextIdx = newCards.findIndex(c => new Date(c.sm2.next) <= new Date());
+                if (nextIdx !== -1) setCurrentCardIndex(nextIdx);
+                else setDone(true);
+            };
+
+            if (!cards.length) return <div className="p-10 text-center">Loading...</div>;
+            
+            if (done) return (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+                        <div className="text-green-500 mb-4 flex justify-center"><IconCheck /></div>
+                        <h2 className="text-2xl font-bold mb-2">All Caught Up!</h2>
+                        <p className="text-gray-500">No cards due for review.</p>
+                        <button onClick={() => {if(confirm('Reset?')) {localStorage.removeItem('meadesQuizV1'); location.reload();}}} className="mt-8 text-xs text-red-400 underline">Reset All</button>
+                    </div>
+                </div>
+            );
+
+            const card = cards[currentCardIndex];
+            const dueCount = cards.filter(c => new Date(c.sm2.next) <= new Date()).length;
+
+            return (
+                <div className="flex flex-col h-full bg-slate-100">
+                    {/* Header */}
+                    <div className="bg-white p-4 shadow-sm flex justify-between items-center z-10">
+                        <div className="flex items-center gap-2 font-bold text-slate-700">
+                            <IconBrain /> Meades Restoration
+                        </div>
+                        <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">{dueCount} Due</span>
+                    </div>
+
+                    {/* Card Container */}
+                    <div className="flex-grow p-4 flex flex-col justify-center max-w-md mx-auto w-full">
+                        <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col min-h-[400px]">
+                            
+                            {/* Question */}
+                            <div className="p-6 flex-grow flex flex-col justify-center border-b border-slate-100">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                    {card.type === 'mc' ? 'Multiple Choice' : card.type === 'tf' ? 'True / False' : 'Recall'}
+                                </span>
+                                <h2 className="text-xl font-bold text-slate-800 mb-4">{card.question}</h2>
+                                {card.options && !showAnswer && (
+                                    <div className="space-y-2">
+                                        {card.options.map((opt, i) => (
+                                            <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600">{opt}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Answer */}
+                            {showAnswer && (
+                                <div className="bg-blue-50 p-6 border-t border-blue-100 animate-fade-in">
+                                    <p className="text-lg font-bold text-slate-900 mb-2">{card.answer}</p>
+                                    <p className="text-sm text-slate-600 leading-relaxed"><strong className="text-blue-800">Why:</strong> {card.explanation}</p>
+                                </div>
+                            )}
+
+                            {/* Controls */}
+                            <div className="bg-slate-50 p-4 border-t border-slate-200">
+                                {!showAnswer ? (
+                                    <button onClick={() => setShowAnswer(true)} className="w-full py-3 bg-blue-600 active:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">
+                                        Show Answer
+                                    </button>
+                                ) : (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <button onClick={() => rate(1)} className="py-3 bg-red-100 text-red-800 font-bold rounded-lg text-sm active:scale-95">Fail</button>
+                                        <button onClick={() => rate(3)} className="py-3 bg-orange-100 text-orange-800 font-bold rounded-lg text-sm active:scale-95">Hard</button>
+                                        <button onClick={() => rate(4)} className="py-3 bg-blue-100 text-blue-800 font-bold rounded-lg text-sm active:scale-95">Good</button>
+                                        <button onClick={() => rate(5)} className="py-3 bg-green-100 text-green-800 font-bold rounded-lg text-sm active:scale-95">Easy</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
